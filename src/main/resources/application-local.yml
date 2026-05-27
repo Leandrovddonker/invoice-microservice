@@ -1,0 +1,32 @@
+server:
+  port: ${SERVER_PORT:8088}
+
+eureka:
+  client:
+    enabled: ${EUREKA_CLIENT_ENABLED:false}
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://eureka-server:8761/eureka/}
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/InvoiceDB
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+services:
+  user:
+    base-url: http://localhost:8083
+
+tax:
+  rates:
+    labor: 0.19
+    part: 0.21
