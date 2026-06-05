@@ -13,5 +13,6 @@ class TaxService(
         when (type) {
             LineType.PART -> taxProperties.part
             LineType.LABOR -> taxProperties.labor
+            LineType.SALE -> taxProperties.sale
         } ?: throw IllegalStateException("VAT rate for $type is not configured")
 }

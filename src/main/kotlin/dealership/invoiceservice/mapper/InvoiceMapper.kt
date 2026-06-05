@@ -1,6 +1,7 @@
 package dealership.invoiceservice.mapper
 
 import dealership.invoiceservice.dto.InvoiceResponseDto
+import dealership.invoiceservice.enums.InvoiceStatus
 import dealership.invoiceservice.models.Invoice
 import org.springframework.stereotype.Component
 
@@ -12,6 +13,7 @@ class InvoiceMapper(
         InvoiceResponseDto(
             invoiceNumber = invoice.invoiceNumber,
             type = invoice.type,
+            status = invoice.status,
             customerId = invoice.customerId,
             customerName = invoice.customerName,
             customerEmail = invoice.customerEmail,
@@ -19,7 +21,9 @@ class InvoiceMapper(
             subtotal = invoice.subtotal,
             vatAmount = invoice.vatAmount,
             totalAmount = invoice.totalAmount,
+            hasChargeback = invoice.status == InvoiceStatus.REFUNDED,
             sourceReference = invoice.sourceReference,
+            reason = invoice.reason,
             createdAt = invoice.createdAt
         )
 
@@ -27,6 +31,7 @@ class InvoiceMapper(
         val invoice = Invoice(
             invoiceNumber = responseInvoice.invoiceNumber,
             type = responseInvoice.type,
+            status = responseInvoice.status,
             customerId = responseInvoice.customerId,
             customerName = responseInvoice.customerName,
             customerEmail = responseInvoice.customerEmail,
@@ -34,6 +39,7 @@ class InvoiceMapper(
             vatAmount = responseInvoice.vatAmount,
             totalAmount = responseInvoice.totalAmount,
             sourceReference = responseInvoice.sourceReference,
+            reason = responseInvoice.reason,
             createdAt = responseInvoice.createdAt
         )
 

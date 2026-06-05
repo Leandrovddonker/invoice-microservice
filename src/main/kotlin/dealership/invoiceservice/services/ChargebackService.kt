@@ -1,54 +1,78 @@
 package dealership.invoiceservice.services
 
-import dealership.invoiceservice.dto.ChargebackResponseDto
-import dealership.invoiceservice.mapper.ChargebackMapper
-import dealership.invoiceservice.models.Chargeback
-import dealership.invoiceservice.models.ChargebackRepository
+import dealership.invoiceservice.dto.CreateChargebackRequestDto
+import dealership.invoiceservice.dto.InvoiceResponseDto
+import dealership.invoiceservice.enums.InvoiceStatus
+import dealership.invoiceservice.enums.InvoiceType
+import dealership.invoiceservice.mapper.InvoiceMapper
 import dealership.invoiceservice.models.Invoice
 import dealership.invoiceservice.models.InvoiceRepository
-import dealership.invoiceservice.rabbit.ChargebackRequestedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
-import java.time.LocalDateTime
+import java.time.Year
+import java.util.Date
 
 @Service
 class ChargebackService(
     private val invoiceRepository: InvoiceRepository,
-    private val repository: ChargebackRepository,
-    private val chargebackMapper: ChargebackMapper
+    private val invoiceMapper: InvoiceMapper
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun createChargeback(request: ChargebackRequestedEvent): Chargeback {
-        val invoice = invoiceRepository.findBySourceReference(request.sourceReference!!)
+    @Transactional
+    fun createChargeback(request: CreateChargebackRequestDto): InvoiceResponseDto {
+        val invoiceNumber = request.invoiceNumber.ifBlank {
+            throw IllegalArgumentException("Invoice number is required")
+        }
+        val invoice = invoiceRepository.findByInvoiceNumber(invoiceNumber)
             ?: throw IllegalArgumentException("Invoice not found")
 
         if (isChargebackValid(request, invoice)) {
-            val chargeback = Chargeback(
-                amount = request.amount,
+            invoice.status = InvoiceStatus.REFUNDED
+
+            val chargebackInvoice = Invoice(
+                type = InvoiceType.CHARGEBACK,
+                status = InvoiceStatus.COMPLETED,
+                customerId = invoice.customerId,
+                customerName = invoice.customerName,
+                customerEmail = invoice.customerEmail,
+                subtotal = request.amount?.negate(),
+                vatAmount = BigDecimal.ZERO,
+                totalAmount = request.amount?.negate(),
+                sourceReference = invoice.invoiceNumber,
                 reason = request.reason,
-                createdAt = LocalDateTime.now(),
-                invoice = invoice
+                createdAt = Date()
             )
-            invoice.chargeback = chargeback
             invoiceRepository.save(invoice)
-            return chargeback
+            val savedChargebackInvoice = saveWithGeneratedInvoiceNumber(chargebackInvoice)
+            return invoiceMapper.invoiceToDto(savedChargebackInvoice)
         }
         throw RuntimeException("Chargeback could not be created")
     }
 
-    fun getAllChargebacks(): List<ChargebackResponseDto> =
-        chargebackMapper.listOfChargebacksToDto(repository.findAll())
+    fun getAllChargebacks(): List<InvoiceResponseDto> =
+        invoiceMapper.listOfInvoicesToDto(invoiceRepository.findAllByType(InvoiceType.CHARGEBACK))
 
-    fun getChargebackByInvoiceId(invoiceId: Long): ChargebackResponseDto =
-        repository.findChargebackByInvoiceId(invoiceId)
-            ?.let(chargebackMapper::chargebackToDto)
+    fun getChargebackByInvoiceNumber(invoiceNumber: String): InvoiceResponseDto =
+        invoiceRepository.findBySourceReferenceAndType(invoiceNumber, InvoiceType.CHARGEBACK)
+            ?.let(invoiceMapper::invoiceToDto)
             ?: throw RuntimeException("Chargeback not found")
 
-    private fun isChargebackValid(request: ChargebackRequestedEvent, invoice: Invoice): Boolean {
-        if (invoice.chargeback != null) {
+    private fun isChargebackValid(request: CreateChargebackRequestDto, invoice: Invoice): Boolean {
+        if (invoice.status == InvoiceStatus.REFUNDED) {
             log.error("Invoice already has a chargeback")
+            return false
+        }
+
+        if (invoice.type == InvoiceType.CHARGEBACK) {
+            log.error("Chargeback cannot be created for a chargeback invoice")
+            return false
+        }
+
+        if (invoice.status == InvoiceStatus.PENDING) {
+            log.error("Chargeback cannot be created for an uncompleted invoice")
             return false
         }
 
@@ -65,5 +89,15 @@ class ChargebackService(
         }
 
         return true
+    }
+
+    private fun saveWithGeneratedInvoiceNumber(invoice: Invoice): Invoice {
+        val savedInvoice = invoiceRepository.save(invoice)
+        savedInvoice.invoiceNumber = String.format(
+            "VA-%d-%04d",
+            Year.now().value,
+            savedInvoice.id
+        )
+        return invoiceRepository.save(savedInvoice)
     }
 }

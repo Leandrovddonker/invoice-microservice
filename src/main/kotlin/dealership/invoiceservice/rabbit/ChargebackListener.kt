@@ -1,6 +1,7 @@
 package dealership.invoiceservice.rabbit
 
 import dealership.invoiceservice.config.RabbitConstants
+import dealership.invoiceservice.dto.CreateChargebackRequestDto
 import dealership.invoiceservice.services.ChargebackService
 import org.slf4j.LoggerFactory
 import org.springframework.amqp.rabbit.annotation.RabbitListener
@@ -14,8 +15,14 @@ class ChargebackListener(
 
     @RabbitListener(queues = [RabbitConstants.CHARGEBACK_REQUESTED_QUEUE])
     fun processChargebackRequested(event: ChargebackRequestedEvent) {
-        log.info("Received chargeback request for source reference {}", event.sourceReference)
-        chargebackService.createChargeback(event)
-        log.info("Chargeback request for {} successfully processed", event.sourceReference)
+        log.info("Received legacy chargeback request for invoice {}", event.invoiceNumber)
+        chargebackService.createChargeback(
+            CreateChargebackRequestDto(
+                invoiceNumber = event.invoiceNumber.orEmpty(),
+                amount = event.amount,
+                reason = event.reason.orEmpty()
+            )
+        )
+        log.info("Chargeback request for invoice {} successfully processed", event.invoiceNumber)
     }
 }

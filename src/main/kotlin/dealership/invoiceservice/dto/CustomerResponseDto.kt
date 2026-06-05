@@ -1,8 +1,12 @@
 package dealership.invoiceservice.dto
 
+import com.fasterxml.jackson.annotation.JsonAlias
+
 data class CustomerResponseDto(
     var id: Long? = null,
-    var firstname: String = "",
-    var lastname: String = "",
+    @field:JsonAlias("firstname")
+    var firstName: String = "",
+    @field:JsonAlias("lastname")
+    var lastName: String = "",
     var email: String = ""
 )
