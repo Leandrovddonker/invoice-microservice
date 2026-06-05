@@ -2,6 +2,7 @@ package dealership.invoiceservice.services
 
 import dealership.invoiceservice.dto.InvoiceResponseDto
 import dealership.invoiceservice.dto.CustomerResponseDto
+import dealership.invoiceservice.enums.InvoiceStatus
 import dealership.invoiceservice.factory.RepairInvoiceInput
 import dealership.invoiceservice.factory.SaleInvoiceRequest
 import dealership.invoiceservice.mapper.InvoiceMapper
@@ -11,6 +12,8 @@ import dealership.invoiceservice.rabbit.RepairCompletedEvent
 import dealership.invoiceservice.rabbit.UserServiceClient
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.time.Year
 
 @Service
 class InvoiceService(
@@ -22,6 +25,7 @@ class InvoiceService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    @Transactional
     fun createRepairInvoice(event: RepairCompletedEvent): Invoice {
         val repairId = event.repairId ?: throw IllegalArgumentException("Repair ID is required")
         val sourceReference = "repair-$repairId"
@@ -32,14 +36,26 @@ class InvoiceService(
         }
 
         val customer: CustomerResponseDto = userServiceClient.getCustomerById(event.customerId!!)
-            ?: throw IllegalArgumentException("Customer not found")
         val invoiceInput = RepairInvoiceInput(event, customer)
         val invoice = repairInvoiceFactory.createInvoice(invoiceInput)
-        return repository.save(invoice)
+        return saveWithGeneratedInvoiceNumber(invoice)
     }
 
-    fun createSaleInvoice(request: SaleInvoiceRequest): Invoice =
-        repository.save(salesInvoiceFactory.createInvoice(request))
+    private fun saveWithGeneratedInvoiceNumber(invoice: Invoice): Invoice {
+        val savedInvoice = repository.save(invoice)
+        savedInvoice.invoiceNumber = String.format(
+            "VA-%d-%04d",
+            Year.now().value,
+            savedInvoice.id
+        )
+        return repository.save(savedInvoice)
+    }
+
+    @Transactional
+    fun createSaleInvoice(request: SaleInvoiceRequest): Invoice {
+        val invoice = salesInvoiceFactory.createInvoice(request)
+        return saveWithGeneratedInvoiceNumber(invoice)
+    }
 
     fun getAllInvoices(): List<InvoiceResponseDto> =
         invoiceMapper.listOfInvoicesToDto(repository.findAll())
@@ -58,5 +74,18 @@ class InvoiceService(
             throw RuntimeException("Customer has no invoices")
         }
         return invoiceMapper.listOfInvoicesToDto(customerInvoices)
+    }
+
+    @Transactional
+    fun completeInvoice(invoiceNumber: String): InvoiceResponseDto {
+        val invoice = repository.findByInvoiceNumber(invoiceNumber)
+            ?: throw RuntimeException("Invoice not found")
+
+        if (invoice.status == InvoiceStatus.PENDING) {
+            invoice.status = InvoiceStatus.COMPLETED
+            repository.save(invoice)
+        }
+
+        return invoiceMapper.invoiceToDto(invoice)
     }
 }

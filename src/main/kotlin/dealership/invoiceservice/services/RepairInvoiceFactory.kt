@@ -3,6 +3,7 @@ package dealership.invoiceservice.services
 import dealership.invoiceservice.dto.CustomerResponseDto
 import dealership.invoiceservice.dto.RepairPartDto
 import dealership.invoiceservice.enums.InvoiceType
+import dealership.invoiceservice.enums.InvoiceStatus
 import dealership.invoiceservice.enums.LineType
 import dealership.invoiceservice.factory.InvoiceFactory
 import dealership.invoiceservice.factory.RepairInvoiceInput
@@ -36,10 +37,10 @@ class RepairInvoiceFactory(
 
     private fun buildBaseInvoice(event: RepairCompletedEvent, customer: CustomerResponseDto): Invoice =
         Invoice(
-            invoiceNumber = UUID.randomUUID().toString(),
             customerId = event.customerId,
             type = InvoiceType.REPAIR,
-            customerName = "${customer.firstname},' ', ${customer.lastname}",
+            status = InvoiceStatus.COMPLETED,
+            customerName = "${customer.firstName},' ', ${customer.lastName}",
             customerEmail = customer.email,
             sourceReference = "repair-${event.repairId}",
             createdAt = Date()

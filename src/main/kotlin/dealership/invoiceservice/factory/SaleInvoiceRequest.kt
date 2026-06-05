@@ -7,7 +7,6 @@ import jakarta.validation.constraints.Positive
 import java.math.BigDecimal
 
 class SaleInvoiceRequest {
-    var carId: Long? = null
     var customerId: Long? = null
 
     @field:NotBlank

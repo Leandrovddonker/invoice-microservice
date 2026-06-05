@@ -13,4 +13,7 @@ class TaxProperties {
 
     @field:NotNull
     var part: BigDecimal? = null
+
+    @field:NotNull
+    var sale: BigDecimal? = null
 }

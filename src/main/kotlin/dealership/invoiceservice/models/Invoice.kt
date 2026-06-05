@@ -1,7 +1,9 @@
 package dealership.invoiceservice.models
 
 import dealership.invoiceservice.enums.InvoiceType
+import dealership.invoiceservice.enums.InvoiceStatus
 import jakarta.persistence.CascadeType
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -9,7 +11,6 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.OneToMany
-import jakarta.persistence.OneToOne
 import java.math.BigDecimal
 import java.util.Date
 
@@ -19,10 +20,14 @@ class Invoice(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
+    @Column(unique = true)
     var invoiceNumber: String? = null,
 
     @Enumerated(EnumType.STRING)
     var type: InvoiceType? = null,
+
+    @Enumerated(EnumType.STRING)
+    var status: InvoiceStatus? = null,
 
     var customerId: Long? = null,
 
@@ -41,10 +46,9 @@ class Invoice(
 
     var sourceReference: String? = null,
 
-    var createdAt: Date? = null,
+    var reason: String? = null,
 
-    @OneToOne(mappedBy = "invoice", cascade = [CascadeType.ALL], orphanRemoval = true)
-    var chargeback: Chargeback? = null
+    var createdAt: Date? = null
 ) {
     fun addLine(line: InvoiceLine) {
         lines.add(line)
