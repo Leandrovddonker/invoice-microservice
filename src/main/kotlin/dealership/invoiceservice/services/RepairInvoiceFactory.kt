@@ -40,9 +40,9 @@ class RepairInvoiceFactory(
             customerId = event.customerId,
             type = InvoiceType.REPAIR,
             status = InvoiceStatus.COMPLETED,
-            customerName = "${customer.firstName},' ', ${customer.lastName}",
+            customerName = "${customer.firstName} ${customer.lastName}",
             customerEmail = customer.email,
-            sourceReference = "repair-${event.repairId}",
+            sourceReference = "Repair-${event.repairId}",
             createdAt = Date()
         )
 

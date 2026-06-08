@@ -27,7 +27,7 @@ class SalesInvoiceFactory(
             customerId = source.customerId,
             customerName = source.customerName,
             customerEmail = source.customerEmail,
-            sourceReference = "sale-${source.licensePlate}",
+            sourceReference = "Sale-${source.licensePlate}",
             createdAt = Date()
         )
 
