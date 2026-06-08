@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @CrossOrigin(origins = ["http://localhost:4200"])
-@RequestMapping("/api/chargebacks")
+@RequestMapping("/api/invoices/chargebacks")
 class ChargebackController(
     private val chargebackService: ChargebackService
 ) {
