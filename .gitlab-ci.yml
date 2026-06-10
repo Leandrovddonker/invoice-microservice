@@ -1,0 +1,135 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+default:
+  image: eclipse-temurin:21-jdk
+
+variables:
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .gradle/wrapper
+    - .gradle/caches
+
+stages:
+  - build
+  - test
+  - package
+  - deploy
+
+before_script:
+  - chmod +x ./gradlew
+
+# Compile the Kotlin/Spring Boot application.
+build:
+  stage: build
+  script:
+    - ./gradlew --build-cache clean classes
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# Run the automated test suite.
+test:
+  stage: test
+  script:
+    - ./gradlew --build-cache test
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - build/test-results/test/*.xml
+    paths:
+      - build/reports/tests/test
+      - build/test-results/test
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# Build the executable jar and prepare the deployment files that will be copied to the server.
+package:
+  stage: package
+  script:
+    - ./gradlew --build-cache bootJar
+    - |
+      cat > docker-compose.yml <<'EOF'
+      services:
+        invoice-service:
+          build:
+            context: .
+            dockerfile: Dockerfile
+          container_name: kotlin-invoice-service
+          restart: unless-stopped
+          ports:
+            - "8088:8088"
+          env_file:
+            - .env
+      EOF
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - build/libs/invoice.jar
+      - Dockerfile
+      - docker-compose.yml
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# Deploy only when code lands on main:
+# copy the deployment bundle over SSH, create a .env file on the server,
+# then rebuild and restart the service with Docker Compose on the server itself.
+deploy:
+  stage: deploy
+  image: alpine:3.20
+  needs:
+    - job: package
+      artifacts: true
+  before_script:
+    - apk add --no-cache openssh-client
+    - test -n "$DEPLOY_HOST" || (echo "Missing DEPLOY_HOST" && exit 1)
+    - test -n "$DEPLOY_USER" || (echo "Missing DEPLOY_USER" && exit 1)
+    - test -n "$SSH_PRIVATE_KEY" || (echo "Missing SSH_PRIVATE_KEY" && exit 1)
+    - test -n "$SPRING_DATASOURCE_URL" || (echo "Missing SPRING_DATASOURCE_URL" && exit 1)
+    - test -n "$SPRING_DATASOURCE_USERNAME" || (echo "Missing SPRING_DATASOURCE_USERNAME" && exit 1)
+    - test -n "$SPRING_DATASOURCE_PASSWORD" || (echo "Missing SPRING_DATASOURCE_PASSWORD" && exit 1)
+    - test -n "$SPRING_RABBITMQ_HOST" || (echo "Missing SPRING_RABBITMQ_HOST" && exit 1)
+    - test -n "$SPRING_RABBITMQ_USERNAME" || (echo "Missing SPRING_RABBITMQ_USERNAME" && exit 1)
+    - test -n "$SPRING_RABBITMQ_PASSWORD" || (echo "Missing SPRING_RABBITMQ_PASSWORD" && exit 1)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+  script:
+    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$CI_PROJECT_NAME/build/libs'"
+    - scp Dockerfile "$DEPLOY_USER@$DEPLOY_HOST:$CI_PROJECT_NAME/Dockerfile"
+    - scp docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$CI_PROJECT_NAME/docker-compose.yml"
+    - scp build/libs/invoice.jar "$DEPLOY_USER@$DEPLOY_HOST:$CI_PROJECT_NAME/build/libs/invoice.jar"
+    - |
+      ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+        cat > '$CI_PROJECT_NAME/.env' <<EOF
+        SPRING_PROFILES_ACTIVE=docker
+        SERVER_PORT=8088
+        SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+        SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+        SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+        SPRING_RABBITMQ_HOST=${SPRING_RABBITMQ_HOST}
+        SPRING_RABBITMQ_PORT=${SPRING_RABBITMQ_PORT:-5672}
+        SPRING_RABBITMQ_USERNAME=${SPRING_RABBITMQ_USERNAME}
+        SPRING_RABBITMQ_PASSWORD=${SPRING_RABBITMQ_PASSWORD}
+        TAX_RATES_LABOR=${TAX_RATES_LABOR:-0.19}
+        TAX_RATES_PART=${TAX_RATES_PART:-0.21}
+        TAX_RATES_SALE=${TAX_RATES_SALE:-0.21}
+        EOF
+        cd '$CI_PROJECT_NAME' &&
+        docker compose down || true &&
+        docker compose up -d --build
+      "
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'

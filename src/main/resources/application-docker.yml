@@ -1,0 +1,12 @@
+server:
+  port: ${SERVER_PORT:8088}
+
+eureka:
+  client:
+    enabled: ${EUREKA_CLIENT_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://eureka-server:8761/eureka/}
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:invoice-service}
+    non-secure-port: ${SERVER_PORT:8088}
+    instance-id: ${spring.application.name}:${eureka.instance.hostname}:${eureka.instance.non-secure-port}

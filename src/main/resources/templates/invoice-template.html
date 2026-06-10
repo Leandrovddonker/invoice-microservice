@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${invoiceTitle}">Invoice</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 28mm 18mm 24mm 18mm;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1f2933;
+            font-size: 12px;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .page {
+            width: 100%;
+            max-width: 170mm;
+            margin: 0 auto;
+        }
+
+        .document-header {
+            border-bottom: 2px solid #1f2933;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .company-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .document-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 10px 0 0;
+        }
+
+        .refund-banner {
+            margin-top: 10px;
+            padding: 8px 10px;
+            border: 1px solid #b42318;
+            background: #fef3f2;
+            color: #b42318;
+            font-weight: 700;
+        }
+
+        .meta-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 18px;
+        }
+
+        .meta-grid td {
+            width: 50%;
+            vertical-align: top;
+            padding: 6px 0;
+        }
+
+        .meta-label {
+            color: #52606d;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 2px;
+        }
+
+        .meta-value {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            margin: 18px 0 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        table.lines {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            table-layout: fixed;
+        }
+
+        table.lines th {
+            background: #e4e7eb;
+            border: 1px solid #cbd2d9;
+            padding: 8px;
+            text-align: left;
+            font-size: 11px;
+        }
+
+        table.lines td {
+            border: 1px solid #d9e2ec;
+            padding: 8px;
+            vertical-align: top;
+        }
+
+        .align-right {
+            text-align: right;
+        }
+
+        .totals {
+            width: 280px;
+            margin-left: auto;
+            margin-top: 18px;
+            border-collapse: collapse;
+        }
+
+        .totals td {
+            padding: 6px 0;
+        }
+
+        .total-row {
+            border-top: 2px solid #1f2933;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .muted {
+            color: #52606d;
+        }
+
+        .summary-note {
+            margin-top: 8px;
+            text-align: right;
+            font-size: 11px;
+            color: #52606d;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="document-header">
+        <p class="company-name">Vermeer Automotive</p>
+        <p class="document-title" th:text="${invoiceTitle}">Invoice</p>
+        <div class="refund-banner" th:if="${isChargebackInvoice}">
+            Chargeback Invoice
+        </div>
+    </div>
+
+    <table class="meta-grid">
+        <tr>
+            <td>
+                <div class="meta-label">Invoice Number</div>
+                <div class="meta-value" th:text="${invoice.invoiceNumber}">VA-2026-0001</div>
+            </td>
+            <td>
+                <div class="meta-label">Invoice Type</div>
+                <div class="meta-value" th:text="${invoice.type}">SALE</div>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <div class="meta-label">Created Date</div>
+                <div class="meta-value" th:text="${#dates.format(invoice.createdAt, 'dd-MM-yyyy')}">05-06-2026</div>
+            </td>
+            <td th:if="${invoice.sourceReference != null and !#strings.isEmpty(invoice.sourceReference)}">
+                <div class="meta-label">Source Reference</div>
+                <div class="meta-value" th:text="${invoice.sourceReference}">VA-2026-0001</div>
+            </td>
+            <td th:unless="${invoice.sourceReference != null and !#strings.isEmpty(invoice.sourceReference)}"></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="meta-label">Customer Name</div>
+                <div class="meta-value" th:text="${invoice.customerName}">Jane Doe</div>
+            </td>
+            <td>
+                <div class="meta-label">Customer Email</div>
+                <div class="meta-value" th:text="${invoice.customerEmail}">jane@example.com</div>
+            </td>
+        </tr>
+        <tr th:if="${invoice.reason != null and !#strings.isEmpty(invoice.reason)}">
+            <td colspan="2">
+                <div class="meta-label">Reason</div>
+                <div class="meta-value" th:text="${invoice.reason}">Customer request</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="section-title">Invoice Lines</div>
+
+    <table class="lines">
+        <thead>
+        <tr>
+            <th>Description</th>
+            <th class="align-right">Quantity</th>
+            <th class="align-right">Unit Price</th>
+            <th class="align-right">VAT Rate</th>
+            <th class="align-right">VAT Amount</th>
+            <th class="align-right">Line Total</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="line : ${invoice.lines}">
+            <td th:text="${line.description}">Brake pads</td>
+            <td class="align-right" th:text="${line.quantity}">1</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(line.unitPrice, 1, 2)}">100.00</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(line.vatRate, 1, 2)}">0.21</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(line.vatAmount, 1, 2)}">21.00</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(line.lineTotal, 1, 2)}">100.00</td>
+        </tr>
+        <tr th:if="${invoice.lines.isEmpty()}">
+            <td th:text="${invoice.reason != null and !#strings.isEmpty(invoice.reason) ? invoice.reason : invoiceTitle}">Refund adjustment</td>
+            <td class="align-right">1</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(invoice.totalAmount, 1, 2)}">-50.00</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(invoice.vatAmount != null and invoice.totalAmount != null and invoice.totalAmount != 0 ? invoice.vatAmount / invoice.totalAmount : 0, 1, 2)}">0.00</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(invoice.vatAmount, 1, 2)}">0.00</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(invoice.totalAmount, 1, 2)}">-50.00</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <table class="totals">
+        <tr>
+            <td class="muted" th:text="${isChargebackInvoice ? 'Refund Subtotal' : 'Subtotal'}">Subtotal</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(invoice.subtotal, 1, 2)}">100.00</td>
+        </tr>
+        <tr>
+            <td class="muted" th:text="${isChargebackInvoice ? 'Refund VAT' : 'Total VAT'}">Total VAT</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(invoice.vatAmount, 1, 2)}">21.00</td>
+        </tr>
+        <tr class="total-row">
+            <td th:text="${isChargebackInvoice ? 'Refund Total' : 'Total Amount'}">Total Amount</td>
+            <td class="align-right" th:text="${#numbers.formatDecimal(invoice.totalAmount, 1, 2)}">121.00</td>
+        </tr>
+    </table>
+    <div class="summary-note" th:if="${isChargebackInvoice}">
+        Negative total means this amount is credited back to the customer.
+    </div>
+</div>
+</body>
+</html>

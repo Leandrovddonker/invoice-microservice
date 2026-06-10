@@ -1,0 +1,10 @@
+.git
+.gitignore
+.gradle
+.idea
+.kotlin
+build/classes
+build/kotlin
+build/reports
+build/test-results
+src
