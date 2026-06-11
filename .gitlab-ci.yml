@@ -1,14 +1,21 @@
 workflow:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\/.+$/'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
-default:
-  image: eclipse-temurin:21-jdk
+stages:
+  - build
+  - test
+  - package
+  - deploy-prod
 
 variables:
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
   GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  DOCKER_IMAGE: "$CI_REGISTRY_IMAGE"
+  DEPLOY_HOST: "student.inf.st.hsleiden.nl"
+  APP_PORT: "8088"
 
 cache:
   key: "$CI_COMMIT_REF_SLUG"
@@ -16,29 +23,29 @@ cache:
     - .gradle/wrapper
     - .gradle/caches
 
-stages:
-  - build
-  - test
-  - package
-  - deploy
+.default-branch-rules: &default_branch_rules
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\/.+$/'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
-before_script:
-  - chmod +x ./gradlew
+default:
+  image: eclipse-temurin:21-jdk
+  before_script:
+    - chmod +x ./gradlew
 
-# Compile the Kotlin/Spring Boot application.
+# Compile sources early so obvious Kotlin/Spring wiring issues fail fast.
 build:
   stage: build
   script:
     - ./gradlew --build-cache clean classes
-  rules:
-    - if: '$CI_COMMIT_BRANCH'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  <<: *default_branch_rules
 
-# Run the automated test suite.
+# Run the full automated test suite on the same branch set.
 test:
   stage: test
   script:
-    - ./gradlew --build-cache test
+    - ./gradlew test
   artifacts:
     when: always
     reports:
@@ -47,87 +54,94 @@ test:
     paths:
       - build/reports/tests/test
       - build/test-results/test
-  rules:
-    - if: '$CI_COMMIT_BRANCH'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  <<: *default_branch_rules
 
-# Build the executable jar and prepare the deployment files that will be copied to the server.
+# Build the production jar, bake it into a Docker image and push that image to GitLab.
 package:
   stage: package
+  image: docker:27.1.1-cli
+  services:
+    - name: docker:27.1.1-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache openjdk21-jdk bash
+    - chmod +x ./gradlew
+    - |
+      for var in CI_REGISTRY CI_REGISTRY_USER CI_REGISTRY_PASSWORD CI_REGISTRY_IMAGE CI_COMMIT_SHORT_SHA CI_COMMIT_BRANCH; do
+        eval "value=\${$var}"
+        if [ -z "$value" ]; then
+          echo "Missing required variable: $var"
+          exit 1
+        fi
+      done
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
   script:
     - ./gradlew --build-cache bootJar
+    - docker build --pull -t "$DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA"
     - |
-      cat > docker-compose.yml <<'EOF'
-      services:
-        invoice-service:
-          build:
-            context: .
-            dockerfile: Dockerfile
-          container_name: kotlin-invoice-service
-          restart: unless-stopped
-          ports:
-            - "8088:8088"
-          env_file:
-            - .env
-      EOF
-  artifacts:
-    expire_in: 1 week
-    paths:
-      - build/libs/invoice.jar
-      - Dockerfile
-      - docker-compose.yml
-  rules:
-    - if: '$CI_COMMIT_BRANCH'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
+        docker tag "$DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA" "$DOCKER_IMAGE:latest"
+        docker push "$DOCKER_IMAGE:latest"
+      fi
+  <<: *default_branch_rules
 
-# Deploy only when code lands on main:
-# copy the deployment bundle over SSH, create a .env file on the server,
-# then rebuild and restart the service with Docker Compose on the server itself.
-deploy:
-  stage: deploy
+# Deploy main to the school server by pulling the prebuilt registry image.
+deploy-prod:
+  stage: deploy-prod
   image: alpine:3.20
-  needs:
-    - job: package
-      artifacts: true
   before_script:
     - apk add --no-cache openssh-client
-    - test -n "$DEPLOY_HOST" || (echo "Missing DEPLOY_HOST" && exit 1)
-    - test -n "$DEPLOY_USER" || (echo "Missing DEPLOY_USER" && exit 1)
-    - test -n "$SSH_PRIVATE_KEY" || (echo "Missing SSH_PRIVATE_KEY" && exit 1)
-    - test -n "$SPRING_DATASOURCE_URL" || (echo "Missing SPRING_DATASOURCE_URL" && exit 1)
-    - test -n "$SPRING_DATASOURCE_USERNAME" || (echo "Missing SPRING_DATASOURCE_USERNAME" && exit 1)
-    - test -n "$SPRING_DATASOURCE_PASSWORD" || (echo "Missing SPRING_DATASOURCE_PASSWORD" && exit 1)
-    - test -n "$SPRING_RABBITMQ_HOST" || (echo "Missing SPRING_RABBITMQ_HOST" && exit 1)
-    - test -n "$SPRING_RABBITMQ_USERNAME" || (echo "Missing SPRING_RABBITMQ_USERNAME" && exit 1)
-    - test -n "$SPRING_RABBITMQ_PASSWORD" || (echo "Missing SPRING_RABBITMQ_PASSWORD" && exit 1)
-    - mkdir -p ~/.ssh
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
-    - chmod 600 ~/.ssh/id_ed25519
-    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+    - |
+      for var in SSH_PRIVATE_KEY DEPLOY_USER DEPLOY_DIR_PROD CI_REGISTRY CI_REGISTRY_USER CI_REGISTRY_PASSWORD CI_REGISTRY_IMAGE SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD SPRING_RABBITMQ_HOST SPRING_RABBITMQ_PORT SPRING_RABBITMQ_USERNAME SPRING_RABBITMQ_PASSWORD SERVICES_USER_BASE_URL EUREKA_CLIENT_ENABLED EUREKA_DEFAULT_ZONE TAX_RATES_LABOR TAX_RATES_PART TAX_RATES_SALE; do
+        eval "value=\${$var}"
+        if [ -z "$value" ]; then
+          echo "Missing required variable: $var"
+          exit 1
+        fi
+      done
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - ssh-keyscan -H student.inf.st.hsleiden.nl >> ~/.ssh/known_hosts
   script:
-    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$CI_PROJECT_NAME/build/libs'"
-    - scp Dockerfile "$DEPLOY_USER@$DEPLOY_HOST:$CI_PROJECT_NAME/Dockerfile"
-    - scp docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$CI_PROJECT_NAME/docker-compose.yml"
-    - scp build/libs/invoice.jar "$DEPLOY_USER@$DEPLOY_HOST:$CI_PROJECT_NAME/build/libs/invoice.jar"
+    - |
+      {
+        printf 'DOCKER_IMAGE=%s\n' "$DOCKER_IMAGE"
+        printf 'DEPLOY_PORT=%s\n' "${DEPLOY_PORT:-$APP_PORT}"
+        printf 'SPRING_PROFILES_ACTIVE=%s\n' 'docker'
+        printf 'SERVER_PORT=%s\n' "$APP_PORT"
+        printf 'SERVICES_USER_BASE_URL=%s\n' "$SERVICES_USER_BASE_URL"
+        printf 'EUREKA_CLIENT_ENABLED=%s\n' "$EUREKA_CLIENT_ENABLED"
+        printf 'EUREKA_DEFAULT_ZONE=%s\n' "$EUREKA_DEFAULT_ZONE"
+        printf 'SPRING_DATASOURCE_URL=%s\n' "$SPRING_DATASOURCE_URL"
+        printf 'SPRING_DATASOURCE_USERNAME=%s\n' "$SPRING_DATASOURCE_USERNAME"
+        printf 'SPRING_DATASOURCE_PASSWORD=%s\n' "$SPRING_DATASOURCE_PASSWORD"
+        printf 'SPRING_RABBITMQ_HOST=%s\n' "$SPRING_RABBITMQ_HOST"
+        printf 'SPRING_RABBITMQ_PORT=%s\n' "$SPRING_RABBITMQ_PORT"
+        printf 'SPRING_RABBITMQ_USERNAME=%s\n' "$SPRING_RABBITMQ_USERNAME"
+        printf 'SPRING_RABBITMQ_PASSWORD=%s\n' "$SPRING_RABBITMQ_PASSWORD"
+        printf 'TAX_RATES_LABOR=%s\n' "$TAX_RATES_LABOR"
+        printf 'TAX_RATES_PART=%s\n' "$TAX_RATES_PART"
+        printf 'TAX_RATES_SALE=%s\n' "$TAX_RATES_SALE"
+      } > deploy.env
+    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_DIR_PROD'"
+    - scp docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR_PROD/docker-compose.yml"
+    - scp deploy.env "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR_PROD/.env"
+    - printf '%s\n' "$CI_REGISTRY_PASSWORD" | ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker login '$CI_REGISTRY' -u '$CI_REGISTRY_USER' --password-stdin"
     - |
       ssh "$DEPLOY_USER@$DEPLOY_HOST" "
-        cat > '$CI_PROJECT_NAME/.env' <<EOF
-        SPRING_PROFILES_ACTIVE=docker
-        SERVER_PORT=8088
-        SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
-        SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
-        SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
-        SPRING_RABBITMQ_HOST=${SPRING_RABBITMQ_HOST}
-        SPRING_RABBITMQ_PORT=${SPRING_RABBITMQ_PORT:-5672}
-        SPRING_RABBITMQ_USERNAME=${SPRING_RABBITMQ_USERNAME}
-        SPRING_RABBITMQ_PASSWORD=${SPRING_RABBITMQ_PASSWORD}
-        TAX_RATES_LABOR=${TAX_RATES_LABOR:-0.19}
-        TAX_RATES_PART=${TAX_RATES_PART:-0.21}
-        TAX_RATES_SALE=${TAX_RATES_SALE:-0.21}
-        EOF
-        cd '$CI_PROJECT_NAME' &&
-        docker compose down || true &&
-        docker compose up -d --build
+        set -e
+        cd '$DEPLOY_DIR_PROD'
+        docker compose -p s1146357_invoice_prod pull
+        docker compose -p s1146357_invoice_prod down || true
+        docker compose -p s1146357_invoice_prod up -d
+        sleep 10
+        docker compose -p s1146357_invoice_prod ps
+        docker compose -p s1146357_invoice_prod logs --tail=50
       "
   environment:
     name: production
