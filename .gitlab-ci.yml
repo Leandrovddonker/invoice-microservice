@@ -134,14 +134,16 @@ deploy-prod:
     - printf '%s\n' "$CI_REGISTRY_PASSWORD" | ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker login '$CI_REGISTRY' -u '$CI_REGISTRY_USER' --password-stdin"
     - |
       ssh "$DEPLOY_USER@$DEPLOY_HOST" "
-        set -e
-        cd '$DEPLOY_DIR_PROD'
-        docker compose -p s1146357_invoice_prod pull
-        docker compose -p s1146357_invoice_prod down || true
-        docker compose -p s1146357_invoice_prod up -d
-        sleep 10
-        docker compose -p s1146357_invoice_prod ps
-        docker compose -p s1146357_invoice_prod logs --tail=50
+        bash -lc '
+          set -e
+          cd \"$DEPLOY_DIR_PROD\"
+          docker compose -p s1146357_invoice_prod pull
+          docker compose -p s1146357_invoice_prod down || true
+          docker compose -p s1146357_invoice_prod up -d
+          sleep 10
+          docker compose -p s1146357_invoice_prod ps
+          docker compose -p s1146357_invoice_prod logs --tail=50
+        '
       "
   environment:
     name: production
