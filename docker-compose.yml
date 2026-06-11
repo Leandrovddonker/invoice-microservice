@@ -3,6 +3,7 @@ services:
     # Production only pulls the image that GitLab CI already built and pushed.
     image: ${DOCKER_IMAGE}:latest
     container_name: ${DEPLOY_CONTAINER_NAME:-kotlin-invoice-service}
+    network_mode: bridge
     restart: unless-stopped
     ports:
       - "${DEPLOY_PORT:-8088}:8088"
