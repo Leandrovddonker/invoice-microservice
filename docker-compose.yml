@@ -1,3 +1,5 @@
+name: s1146357_invoices
+
 services:
   invoice-service:
     # Production only pulls the image that GitLab CI already built and pushed.
