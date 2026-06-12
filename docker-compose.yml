@@ -5,7 +5,7 @@ services:
     # Production only pulls the image that GitLab CI already built and pushed.
     image: ${DOCKER_IMAGE}:latest
     ports:
-      - "${DEPLOY_PORT:-8088}:8088"
+      - "${DEPLOY_PORT:-3201}:3201"
     container_name: ${DEPLOY_CONTAINER_NAME:-kotlin-invoice-service}
     restart: unless-stopped
     deploy:
@@ -17,7 +17,7 @@ services:
         - invoice-network
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
-      SERVER_PORT: ${SERVER_PORT:-8088}
+      SERVER_PORT: ${SERVER_PORT:-3201}
       SERVICES_USER_BASE_URL: ${SERVICES_USER_BASE_URL}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-true}
       EUREKA_DEFAULT_ZONE: ${EUREKA_DEFAULT_ZONE:-http://eureka-server:8761/eureka/}

@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY build/libs/invoice.jar app.jar
 
-EXPOSE 8088
+EXPOSE 3201
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
