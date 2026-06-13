@@ -23,6 +23,18 @@ class InvoicePdfService(
         val invoice = invoiceRepository.findDetailedByInvoiceNumber(invoiceNumber)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found")
 
+        return renderPdf(invoice)
+    }
+
+    @Transactional(readOnly = true)
+    fun generateCustomerInvoicePdf(invoiceNumber: String, customerId: Long): ByteArray {
+        val invoice = invoiceRepository.findDetailedByInvoiceNumberAndCustomerId(invoiceNumber, customerId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found")
+
+        return renderPdf(invoice)
+    }
+
+    private fun renderPdf(invoice: Invoice): ByteArray {
         val html = templateEngine.process(
             "invoice-template",
             Context(

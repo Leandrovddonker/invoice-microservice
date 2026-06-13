@@ -10,7 +10,10 @@ interface InvoiceRepository : JpaRepository<Invoice, Long> {
     fun findByInvoiceNumber(invoiceNumber: String): Invoice?
     @EntityGraph(attributePaths = ["lines"])
     fun findDetailedByInvoiceNumber(invoiceNumber: String): Invoice?
+    @EntityGraph(attributePaths = ["lines"])
+    fun findDetailedByInvoiceNumberAndCustomerId(invoiceNumber: String, customerId: Long): Invoice?
     fun findBySourceReferenceAndType(sourceReference: String, type: InvoiceType): Invoice?
     fun findAllByType(type: InvoiceType): List<Invoice>
-    fun findInvoiceByCustomerId(customerId: Long): List<Invoice>
+    @EntityGraph(attributePaths = ["lines"])
+    fun findAllByCustomerIdOrderByCreatedAtDesc(customerId: Long): List<Invoice>
 }

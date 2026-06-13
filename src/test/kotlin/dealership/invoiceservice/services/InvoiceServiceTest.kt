@@ -9,6 +9,7 @@ import dealership.invoiceservice.models.InvoiceRepository
 import dealership.invoiceservice.rabbit.UserServiceClient
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.`when`
@@ -123,5 +124,26 @@ class InvoiceServiceTest {
         assertEquals(InvoiceStatus.COMPLETED, invoice.status)
         assertEquals(InvoiceStatus.COMPLETED, response.status)
         verify(invoiceRepository).save(invoice)
+    }
+
+    @Test
+    fun `get invoices by customer id returns empty list when customer has no invoices`() {
+        val repairInvoiceFactory = mock(RepairInvoiceFactory::class.java)
+        val salesInvoiceFactory = mock(SalesInvoiceFactory::class.java)
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val userServiceClient = mock(UserServiceClient::class.java)
+        val service = InvoiceService(
+            repairInvoiceFactory = repairInvoiceFactory,
+            salesInvoiceFactory = salesInvoiceFactory,
+            repository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper()),
+            userServiceClient = userServiceClient
+        )
+
+        `when`(invoiceRepository.findAllByCustomerIdOrderByCreatedAtDesc(99L)).thenReturn(emptyList())
+
+        val invoices = service.getInvoicesByCustomerId(99L)
+
+        assertTrue(invoices.isEmpty())
     }
 }
