@@ -39,6 +39,28 @@ class GatewayJwtAuthenticationFilterTest {
     }
 
     @Test
+    fun `normalizes prefixed manager role authority in security context`() {
+        val request = MockHttpServletRequest().apply {
+            addHeader(HttpHeaders.AUTHORIZATION, bearerToken(userId = 7L, role = "ROLE_MANAGER"))
+        }
+        val response = MockHttpServletResponse()
+
+        try {
+            filter.doFilter(
+                request,
+                response,
+                FilterChain { _, _ ->
+                    val authentication = SecurityContextHolder.getContext().authentication
+                    assertNotNull(authentication)
+                    assertEquals("ROLE_MANAGER", authentication!!.authorities.single().authority)
+                }
+            )
+        } finally {
+            SecurityContextHolder.clearContext()
+        }
+    }
+
+    @Test
     fun `leaves authorities empty when role claim is missing`() {
         val request = MockHttpServletRequest().apply {
             addHeader(HttpHeaders.AUTHORIZATION, tokenWithPayload("""{"sub":"42"}"""))

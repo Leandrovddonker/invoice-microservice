@@ -53,7 +53,11 @@ class GatewayJwtTokenParser(
 
     private fun normalizeRole(value: Any?): String? =
         when (value) {
-            is String -> value.trim().takeIf(String::isNotEmpty)?.uppercase()
+            is String -> value.trim()
+                .takeIf(String::isNotEmpty)
+                ?.uppercase()
+                ?.removePrefix("ROLE_")
+                ?.takeIf(String::isNotEmpty)
             is Collection<*> -> value.asSequence().mapNotNull(::normalizeRole).firstOrNull()
             is Array<*> -> value.asSequence().mapNotNull(::normalizeRole).firstOrNull()
             else -> null
