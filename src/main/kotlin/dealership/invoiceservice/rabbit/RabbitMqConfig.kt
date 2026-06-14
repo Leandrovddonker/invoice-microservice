@@ -46,5 +46,37 @@ class RabbitMqConfig {
         .with(RabbitConstants.CHARGEBACK_REQUESTED_ROUTING_KEY)
 
     @Bean
+    fun invoiceCreatedQueue(): Queue = Queue(RabbitConstants.INVOICE_CREATED_QUEUE, true)
+
+    @Bean
+    fun invoiceCreatedExchange(): DirectExchange =
+        DirectExchange(RabbitConstants.INVOICE_CREATED_EXCHANGE, true, false)
+
+    @Bean
+    fun invoiceCreatedBinding(
+        @Qualifier("invoiceCreatedQueue") invoiceCreatedQueue: Queue,
+        @Qualifier("invoiceCreatedExchange") invoiceCreatedExchange: DirectExchange
+    ): Binding = BindingBuilder
+        .bind(invoiceCreatedQueue)
+        .to(invoiceCreatedExchange)
+        .with(RabbitConstants.INVOICE_CREATED_ROUTING_KEY)
+
+    @Bean
+    fun invoiceCompletedQueue(): Queue = Queue(RabbitConstants.INVOICE_COMPLETED_QUEUE, true)
+
+    @Bean
+    fun invoiceCompletedExchange(): DirectExchange =
+        DirectExchange(RabbitConstants.INVOICE_COMPLETED_EXCHANGE, true, false)
+
+    @Bean
+    fun invoiceCompletedBinding(
+        @Qualifier("invoiceCompletedQueue") invoiceCompletedQueue: Queue,
+        @Qualifier("invoiceCompletedExchange") invoiceCompletedExchange: DirectExchange
+    ): Binding = BindingBuilder
+        .bind(invoiceCompletedQueue)
+        .to(invoiceCompletedExchange)
+        .with(RabbitConstants.INVOICE_COMPLETED_ROUTING_KEY)
+
+    @Bean
     fun jacksonJsonMessageConverter(): MessageConverter = JacksonJsonMessageConverter()
 }

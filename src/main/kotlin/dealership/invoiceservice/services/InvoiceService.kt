@@ -8,6 +8,7 @@ import dealership.invoiceservice.factory.SaleInvoiceRequest
 import dealership.invoiceservice.mapper.InvoiceMapper
 import dealership.invoiceservice.models.Invoice
 import dealership.invoiceservice.models.InvoiceRepository
+import dealership.invoiceservice.rabbit.InvoiceEventPublisher
 import dealership.invoiceservice.rabbit.RepairCompletedEvent
 import dealership.invoiceservice.rabbit.UserServiceClient
 import org.slf4j.LoggerFactory
@@ -21,14 +22,15 @@ class InvoiceService(
     private val salesInvoiceFactory: SalesInvoiceFactory,
     private val repository: InvoiceRepository,
     private val invoiceMapper: InvoiceMapper,
-    private val userServiceClient: UserServiceClient
+    private val userServiceClient: UserServiceClient,
+    private val invoiceEventPublisher: InvoiceEventPublisher
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Transactional
     fun createRepairInvoice(event: RepairCompletedEvent): Invoice {
         val repairId = event.repairId ?: throw IllegalArgumentException("Repair ID is required")
-        val sourceReference = "repair-$repairId"
+        val sourceReference = "Repair-$repairId"
 
         if (repository.existsBySourceReference(sourceReference)) {
             return repository.findBySourceReference(sourceReference)
@@ -38,7 +40,7 @@ class InvoiceService(
         val customer: CustomerResponseDto = userServiceClient.getCustomerById(event.customerId!!)
         val invoiceInput = RepairInvoiceInput(event, customer)
         val invoice = repairInvoiceFactory.createInvoice(invoiceInput)
-        return saveWithGeneratedInvoiceNumber(invoice)
+        return saveWithGeneratedInvoiceNumber(invoice).also(::publishInvoiceCreated)
     }
 
     private fun saveWithGeneratedInvoiceNumber(invoice: Invoice): Invoice {
@@ -54,7 +56,7 @@ class InvoiceService(
     @Transactional
     fun createSaleInvoice(request: SaleInvoiceRequest): Invoice {
         val invoice = salesInvoiceFactory.createInvoice(request)
-        return saveWithGeneratedInvoiceNumber(invoice)
+        return saveWithGeneratedInvoiceNumber(invoice).also(::publishInvoiceCreated)
     }
 
     fun getAllInvoices(): List<InvoiceResponseDto> =
@@ -79,8 +81,13 @@ class InvoiceService(
         if (invoice.status == InvoiceStatus.PENDING) {
             invoice.status = InvoiceStatus.COMPLETED
             repository.save(invoice)
+            return invoiceMapper.invoiceToDto(invoice).also(invoiceEventPublisher::publishInvoiceCompleted)
         }
 
         return invoiceMapper.invoiceToDto(invoice)
+    }
+
+    private fun publishInvoiceCreated(invoice: Invoice) {
+        invoiceEventPublisher.publishInvoiceCreated(invoiceMapper.invoiceToDto(invoice))
     }
 }
