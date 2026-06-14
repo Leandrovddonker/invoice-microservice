@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8088}
+  port: ${SERVER_PORT:3201}
 
 eureka:
   client:
@@ -8,5 +8,5 @@ eureka:
       defaultZone: ${EUREKA_DEFAULT_ZONE:http://eureka-server:8761/eureka/}
   instance:
     hostname: ${EUREKA_INSTANCE_HOSTNAME:invoice-service}
-    non-secure-port: ${SERVER_PORT:8088}
+    non-secure-port: ${SERVER_PORT:3201}
     instance-id: ${spring.application.name}:${eureka.instance.hostname}:${eureka.instance.non-secure-port}
