@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 
 @RestController
-@CrossOrigin(origins = ["http://localhost:4200"])
+@CrossOrigin(origins = ["http://localhost:4200", "http://student.inf.st.hsleiden.nl:8091/"])
 @RequestMapping("/api/invoices")
 class InvoiceController(
     private val invoiceService: InvoiceService,
