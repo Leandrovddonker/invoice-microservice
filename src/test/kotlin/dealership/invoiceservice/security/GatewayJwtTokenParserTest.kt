@@ -49,6 +49,16 @@ class GatewayJwtTokenParserTest {
         assertEquals("MANAGER", principal?.role)
     }
 
+    @Test
+    fun `normalizes prefixed role claim`() {
+        val token = tokenWithPayload("""{"sub":"10","role":"ROLE_ADMIN"}""")
+
+        val principal = parser.parse(token)
+
+        assertEquals(10L, principal?.userId)
+        assertEquals("ADMIN", principal?.role)
+    }
+
     private fun tokenWithPayload(payload: String): String {
         val encoder = Base64.getUrlEncoder().withoutPadding()
         val header = encoder.encodeToString("""{"alg":"none"}""".toByteArray())
