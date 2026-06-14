@@ -68,13 +68,8 @@ class InvoiceService(
         return invoice
     }
 
-    fun getInvoicesByCustomerId(id: Long): List<InvoiceResponseDto> {
-        val customerInvoices = repository.findInvoiceByCustomerId(id)
-        if (customerInvoices.isEmpty()) {
-            throw RuntimeException("Customer has no invoices")
-        }
-        return invoiceMapper.listOfInvoicesToDto(customerInvoices)
-    }
+    fun getInvoicesByCustomerId(id: Long): List<InvoiceResponseDto> =
+        invoiceMapper.listOfInvoicesToDto(repository.findAllByCustomerIdOrderByCreatedAtDesc(id))
 
     @Transactional
     fun completeInvoice(invoiceNumber: String): InvoiceResponseDto {
