@@ -6,6 +6,8 @@ import dealership.invoiceservice.mapper.InvoiceLineMapper
 import dealership.invoiceservice.mapper.InvoiceMapper
 import dealership.invoiceservice.models.Invoice
 import dealership.invoiceservice.models.InvoiceRepository
+import dealership.invoiceservice.rabbit.InvoiceEventPublisher
+import dealership.invoiceservice.rabbit.RepairCompletedEvent
 import dealership.invoiceservice.rabbit.UserServiceClient
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -15,26 +17,29 @@ import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.`when`
 import org.mockito.Mockito.any
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import java.math.BigDecimal
 import java.util.Date
-import java.util.Optional
 
 class InvoiceServiceTest {
 
     @Test
-    fun `create sale invoice generates invoice number from persisted id`() {
+    fun `create sale invoice generates invoice number from persisted id and publishes created event`() {
         val repairInvoiceFactory = mock(RepairInvoiceFactory::class.java)
         val salesInvoiceFactory = mock(SalesInvoiceFactory::class.java)
         val invoiceRepository = mock(InvoiceRepository::class.java)
         val userServiceClient = mock(UserServiceClient::class.java)
+        val invoiceEventPublisher = mock(InvoiceEventPublisher::class.java)
         val service = InvoiceService(
             repairInvoiceFactory = repairInvoiceFactory,
             salesInvoiceFactory = salesInvoiceFactory,
             repository = invoiceRepository,
             invoiceMapper = InvoiceMapper(InvoiceLineMapper()),
-            userServiceClient = userServiceClient
+            userServiceClient = userServiceClient,
+            invoiceEventPublisher = invoiceEventPublisher
         )
 
         val request = SaleInvoiceRequest().apply {
@@ -85,20 +90,23 @@ class InvoiceServiceTest {
         val savedInvoices = captor.allValues
         assertEquals(null, savedInvoices[0].invoiceNumber)
         assertEquals("VA-${java.time.Year.now().value}-0042", savedInvoices[1].invoiceNumber)
+        verify(invoiceEventPublisher).publishInvoiceCreated(InvoiceMapper(InvoiceLineMapper()).invoiceToDto(result))
     }
 
     @Test
-    fun `complete invoice changes pending status to completed`() {
+    fun `complete invoice changes pending status to completed and publishes completed event`() {
         val repairInvoiceFactory = mock(RepairInvoiceFactory::class.java)
         val salesInvoiceFactory = mock(SalesInvoiceFactory::class.java)
         val invoiceRepository = mock(InvoiceRepository::class.java)
         val userServiceClient = mock(UserServiceClient::class.java)
+        val invoiceEventPublisher = mock(InvoiceEventPublisher::class.java)
         val service = InvoiceService(
             repairInvoiceFactory = repairInvoiceFactory,
             salesInvoiceFactory = salesInvoiceFactory,
             repository = invoiceRepository,
             invoiceMapper = InvoiceMapper(InvoiceLineMapper()),
-            userServiceClient = userServiceClient
+            userServiceClient = userServiceClient,
+            invoiceEventPublisher = invoiceEventPublisher
         )
 
         val invoice = Invoice(
@@ -124,6 +132,93 @@ class InvoiceServiceTest {
         assertEquals(InvoiceStatus.COMPLETED, invoice.status)
         assertEquals(InvoiceStatus.COMPLETED, response.status)
         verify(invoiceRepository).save(invoice)
+        verify(invoiceEventPublisher).publishInvoiceCompleted(response)
+    }
+
+    @Test
+    fun `complete invoice does not republish when already completed`() {
+        val repairInvoiceFactory = mock(RepairInvoiceFactory::class.java)
+        val salesInvoiceFactory = mock(SalesInvoiceFactory::class.java)
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val userServiceClient = mock(UserServiceClient::class.java)
+        val invoiceEventPublisher = mock(InvoiceEventPublisher::class.java)
+        val service = InvoiceService(
+            repairInvoiceFactory = repairInvoiceFactory,
+            salesInvoiceFactory = salesInvoiceFactory,
+            repository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper()),
+            userServiceClient = userServiceClient,
+            invoiceEventPublisher = invoiceEventPublisher
+        )
+
+        val invoice = Invoice(
+            id = 42L,
+            invoiceNumber = "VA-2026-0042",
+            type = dealership.invoiceservice.enums.InvoiceType.SALE,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 1L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("1000.00"),
+            vatAmount = BigDecimal("210.00"),
+            totalAmount = BigDecimal("1210.00"),
+            sourceReference = "sale-AB-123-CD",
+            createdAt = Date()
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0042")).thenReturn(invoice)
+
+        val response = service.completeInvoice("VA-2026-0042")
+
+        assertEquals(InvoiceStatus.COMPLETED, response.status)
+        verify(invoiceRepository, never()).save(any(Invoice::class.java))
+        verifyNoInteractions(invoiceEventPublisher)
+    }
+
+    @Test
+    fun `create repair invoice does not recreate or republish when invoice already exists`() {
+        val repairInvoiceFactory = mock(RepairInvoiceFactory::class.java)
+        val salesInvoiceFactory = mock(SalesInvoiceFactory::class.java)
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val userServiceClient = mock(UserServiceClient::class.java)
+        val invoiceEventPublisher = mock(InvoiceEventPublisher::class.java)
+        val service = InvoiceService(
+            repairInvoiceFactory = repairInvoiceFactory,
+            salesInvoiceFactory = salesInvoiceFactory,
+            repository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper()),
+            userServiceClient = userServiceClient,
+            invoiceEventPublisher = invoiceEventPublisher
+        )
+
+        val event = RepairCompletedEvent(
+            repairId = 7L,
+            customerId = 12L,
+            laborHours = 2,
+            laborPrice = BigDecimal("100.00")
+        )
+        val existingInvoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0007",
+            type = dealership.invoiceservice.enums.InvoiceType.REPAIR,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 12L,
+            customerName = "Grace Hopper",
+            customerEmail = "grace@example.com",
+            subtotal = BigDecimal("200.00"),
+            vatAmount = BigDecimal("38.00"),
+            totalAmount = BigDecimal("238.00"),
+            sourceReference = "Repair-7",
+            createdAt = Date()
+        )
+
+        `when`(invoiceRepository.existsBySourceReference("Repair-7")).thenReturn(true)
+        `when`(invoiceRepository.findBySourceReference("Repair-7")).thenReturn(existingInvoice)
+
+        val result = service.createRepairInvoice(event)
+
+        assertEquals(existingInvoice, result)
+        verifyNoInteractions(userServiceClient, repairInvoiceFactory, invoiceEventPublisher)
     }
 
     @Test
@@ -132,12 +227,14 @@ class InvoiceServiceTest {
         val salesInvoiceFactory = mock(SalesInvoiceFactory::class.java)
         val invoiceRepository = mock(InvoiceRepository::class.java)
         val userServiceClient = mock(UserServiceClient::class.java)
+        val invoiceEventPublisher = mock(InvoiceEventPublisher::class.java)
         val service = InvoiceService(
             repairInvoiceFactory = repairInvoiceFactory,
             salesInvoiceFactory = salesInvoiceFactory,
             repository = invoiceRepository,
             invoiceMapper = InvoiceMapper(InvoiceLineMapper()),
-            userServiceClient = userServiceClient
+            userServiceClient = userServiceClient,
+            invoiceEventPublisher = invoiceEventPublisher
         )
 
         `when`(invoiceRepository.findAllByCustomerIdOrderByCreatedAtDesc(99L)).thenReturn(emptyList())
