@@ -1,5 +1,6 @@
 package dealership.invoiceservice.dto
 
+import dealership.invoiceservice.enums.ChargebackRequestStatus
 import dealership.invoiceservice.enums.InvoiceType
 import dealership.invoiceservice.enums.InvoiceStatus
 import java.math.BigDecimal
@@ -19,5 +20,10 @@ data class InvoiceResponseDto(
     var hasChargeback: Boolean = false,
     var sourceReference: String? = null,
     var reason: String? = null,
-    var createdAt: Date? = null
+    var createdAt: Date? = null,
+    var chargebackRequestStatus: ChargebackRequestStatus = ChargebackRequestStatus.NONE,
+    var chargebackRequestedAmount: BigDecimal? = null,
+    var chargebackRequestReason: String? = null,
+    var chargebackRequestedAt: Date? = null,
+    var chargebackReviewedAt: Date? = null
 )

@@ -243,4 +243,56 @@ class InvoiceServiceTest {
 
         assertTrue(invoices.isEmpty())
     }
+
+    @Test
+    fun `get all invoices returns newest invoices first`() {
+        val repairInvoiceFactory = mock(RepairInvoiceFactory::class.java)
+        val salesInvoiceFactory = mock(SalesInvoiceFactory::class.java)
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val userServiceClient = mock(UserServiceClient::class.java)
+        val invoiceEventPublisher = mock(InvoiceEventPublisher::class.java)
+        val service = InvoiceService(
+            repairInvoiceFactory = repairInvoiceFactory,
+            salesInvoiceFactory = salesInvoiceFactory,
+            repository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper()),
+            userServiceClient = userServiceClient,
+            invoiceEventPublisher = invoiceEventPublisher
+        )
+
+        val newest = Invoice(
+            id = 2L,
+            invoiceNumber = "VA-2026-0002",
+            type = dealership.invoiceservice.enums.InvoiceType.SALE,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 13L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "sale-2",
+            createdAt = Date(2_000L)
+        )
+        val oldest = Invoice(
+            id = 1L,
+            invoiceNumber = "VA-2026-0001",
+            type = dealership.invoiceservice.enums.InvoiceType.REPAIR,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 12L,
+            customerName = "Grace Hopper",
+            customerEmail = "grace@example.com",
+            subtotal = BigDecimal("200.00"),
+            vatAmount = BigDecimal("42.00"),
+            totalAmount = BigDecimal("242.00"),
+            sourceReference = "repair-1",
+            createdAt = Date(1_000L)
+        )
+
+        `when`(invoiceRepository.findAllByOrderByCreatedAtDesc()).thenReturn(listOf(newest, oldest))
+
+        val invoices = service.getAllInvoices()
+
+        assertEquals(listOf("VA-2026-0002", "VA-2026-0001"), invoices.map { it.invoiceNumber })
+    }
 }

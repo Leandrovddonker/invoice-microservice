@@ -40,6 +40,16 @@ class GatewayJwtTokenParserTest {
     }
 
     @Test
+    fun `parses nested numeric user id claim`() {
+        val token = tokenWithPayload("""{"user":{"id":91},"roles":["customer"]}""")
+
+        val principal = parser.parse(token)
+
+        assertEquals(91L, principal?.userId)
+        assertEquals("CUSTOMER", principal?.role)
+    }
+
+    @Test
     fun `parses first role from roles collection`() {
         val token = tokenWithPayload("""{"sub":"10","roles":["manager","admin"]}""")
 

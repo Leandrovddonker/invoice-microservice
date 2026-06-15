@@ -2,6 +2,8 @@ package dealership.invoiceservice.models
 
 import dealership.invoiceservice.enums.LineType
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
@@ -27,6 +29,7 @@ class InvoiceLine(
 
     var lineTotal: BigDecimal? = null,
 
+    @Enumerated(EnumType.STRING)
     var lineType: LineType? = null,
 
     @ManyToOne

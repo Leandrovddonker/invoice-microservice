@@ -24,7 +24,12 @@ class InvoiceMapper(
             hasChargeback = invoice.status == InvoiceStatus.REFUNDED,
             sourceReference = invoice.sourceReference,
             reason = invoice.reason,
-            createdAt = invoice.createdAt
+            createdAt = invoice.createdAt,
+            chargebackRequestStatus = invoice.chargebackRequestStatus,
+            chargebackRequestedAmount = invoice.chargebackRequestedAmount,
+            chargebackRequestReason = invoice.chargebackRequestReason,
+            chargebackRequestedAt = invoice.chargebackRequestedAt,
+            chargebackReviewedAt = invoice.chargebackReviewedAt
         )
 
     fun dtoToInvoice(responseInvoice: InvoiceResponseDto): Invoice {
@@ -40,7 +45,12 @@ class InvoiceMapper(
             totalAmount = responseInvoice.totalAmount,
             sourceReference = responseInvoice.sourceReference,
             reason = responseInvoice.reason,
-            createdAt = responseInvoice.createdAt
+            createdAt = responseInvoice.createdAt,
+            chargebackRequestStatus = responseInvoice.chargebackRequestStatus,
+            chargebackRequestedAmount = responseInvoice.chargebackRequestedAmount,
+            chargebackRequestReason = responseInvoice.chargebackRequestReason,
+            chargebackRequestedAt = responseInvoice.chargebackRequestedAt,
+            chargebackReviewedAt = responseInvoice.chargebackReviewedAt
         )
 
         responseInvoice.lines.forEach { line ->
