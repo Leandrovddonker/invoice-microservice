@@ -61,6 +61,28 @@ class GatewayJwtAuthenticationFilterTest {
     }
 
     @Test
+    fun `accepts lowercase bearer scheme`() {
+        val request = MockHttpServletRequest().apply {
+            addHeader(HttpHeaders.AUTHORIZATION, bearerToken(userId = 7L, role = "CUSTOMER").replace("Bearer ", "bearer "))
+        }
+        val response = MockHttpServletResponse()
+
+        try {
+            filter.doFilter(
+                request,
+                response,
+                FilterChain { _, _ ->
+                    val authentication = SecurityContextHolder.getContext().authentication
+                    assertNotNull(authentication)
+                    assertEquals("ROLE_CUSTOMER", authentication!!.authorities.single().authority)
+                }
+            )
+        } finally {
+            SecurityContextHolder.clearContext()
+        }
+    }
+
+    @Test
     fun `leaves authorities empty when role claim is missing`() {
         val request = MockHttpServletRequest().apply {
             addHeader(HttpHeaders.AUTHORIZATION, tokenWithPayload("""{"sub":"42"}"""))
@@ -86,6 +108,22 @@ class GatewayJwtAuthenticationFilterTest {
     fun `returns unauthorized when token payload is invalid`() {
         val request = MockHttpServletRequest().apply {
             addHeader(HttpHeaders.AUTHORIZATION, "Bearer invalid.token")
+        }
+        val response = MockHttpServletResponse()
+
+        filter.doFilter(
+            request,
+            response,
+            FilterChain { _, _ -> }
+        )
+
+        assertEquals(401, response.status)
+    }
+
+    @Test
+    fun `returns unauthorized when token has no supported user id claim`() {
+        val request = MockHttpServletRequest().apply {
+            addHeader(HttpHeaders.AUTHORIZATION, tokenWithPayload("""{"email":"ada@example.com"}"""))
         }
         val response = MockHttpServletResponse()
 

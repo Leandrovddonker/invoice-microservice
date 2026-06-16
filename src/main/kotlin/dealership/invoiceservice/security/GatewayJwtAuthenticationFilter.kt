@@ -3,6 +3,7 @@ package dealership.invoiceservice.security
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -14,40 +15,75 @@ import org.springframework.web.filter.OncePerRequestFilter
 class GatewayJwtAuthenticationFilter(
     private val tokenParser: GatewayJwtTokenParser
 ) : OncePerRequestFilter() {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        val authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION)
-
-        if (authorizationHeader.isNullOrBlank() || !authorizationHeader.startsWith(BEARER_PREFIX, ignoreCase = true)) {
+        val token = extractBearerToken(request) ?: run {
             filterChain.doFilter(request, response)
             return
         }
 
-        val token = authorizationHeader.removePrefix(BEARER_PREFIX).trim()
+        if (token.isBlank()) {
+            log.warn("Unauthorized request to {} {}: bearer token is missing", request.method, request.requestURI)
+            sendUnauthorized(response, "Bearer token is missing")
+            return
+        }
 
         try {
-            val principal = tokenParser.parse(token)
-            if (principal != null) {
-                val authorities = principal.role
-                    ?.let { listOf(SimpleGrantedAuthority("ROLE_$it")) }
-                    ?: emptyList()
-
-                val authentication = UsernamePasswordAuthenticationToken.authenticated(
-                    principal,
-                    null,
-                    authorities
+            val authentication = buildAuthentication(token)
+            if (authentication == null) {
+                log.warn(
+                    "Unauthorized request to {} {}: JWT is missing a supported numeric user id claim",
+                    request.method,
+                    request.requestURI
                 )
-                SecurityContextHolder.getContext().authentication = authentication
+                sendUnauthorized(response, "JWT is missing a supported numeric user id claim")
+                return
             }
+
+            SecurityContextHolder.getContext().authentication = authentication
             filterChain.doFilter(request, response)
         } catch (exception: IllegalArgumentException) {
-            SecurityContextHolder.clearContext()
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, exception.message)
+            log.warn(
+                "Unauthorized request to {} {}: {}",
+                request.method,
+                request.requestURI,
+                exception.message
+            )
+            sendUnauthorized(response, exception.message)
         }
+    }
+
+    private fun extractBearerToken(request: HttpServletRequest): String? {
+        val authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION)
+        if (authorizationHeader.isNullOrBlank() || !authorizationHeader.startsWith(BEARER_PREFIX, ignoreCase = true)) {
+            return null
+        }
+
+        return authorizationHeader.substringAfter(' ', "").trim()
+    }
+
+    private fun buildAuthentication(token: String): UsernamePasswordAuthenticationToken? {
+        val principal = tokenParser.parse(token) ?: return null
+        return UsernamePasswordAuthenticationToken.authenticated(
+            principal,
+            null,
+            authoritiesFor(principal)
+        )
+    }
+
+    private fun authoritiesFor(principal: GatewayJwtPrincipal): List<SimpleGrantedAuthority> =
+        principal.role
+            ?.let { listOf(SimpleGrantedAuthority("ROLE_$it")) }
+            ?: emptyList()
+
+    private fun sendUnauthorized(response: HttpServletResponse, message: String?) {
+        SecurityContextHolder.clearContext()
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, message)
     }
 
     companion object {

@@ -1,5 +1,6 @@
 package dealership.invoiceservice.models
 
+import dealership.invoiceservice.enums.ChargebackRequestStatus
 import dealership.invoiceservice.enums.InvoiceType
 import dealership.invoiceservice.enums.InvoiceStatus
 import jakarta.persistence.CascadeType
@@ -48,7 +49,18 @@ class Invoice(
 
     var reason: String? = null,
 
-    var createdAt: Date? = null
+    var createdAt: Date? = null,
+
+    @Enumerated(EnumType.STRING)
+    var chargebackRequestStatus: ChargebackRequestStatus = ChargebackRequestStatus.NONE,
+
+    var chargebackRequestedAmount: BigDecimal? = null,
+
+    var chargebackRequestReason: String? = null,
+
+    var chargebackRequestedAt: Date? = null,
+
+    var chargebackReviewedAt: Date? = null
 ) {
     fun addLine(line: InvoiceLine) {
         lines.add(line)

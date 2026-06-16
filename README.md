@@ -43,7 +43,9 @@ It supports:
 ### Chargebacks
 
 - the service listens for `chargeback.requested`
-- chargebacks can also be created through the HTTP API
+- managers can still create chargebacks immediately through the staff API
+- customers can request chargebacks through the HTTP API
+- management must approve or decline a request before a chargeback invoice is created
 
 ## HTTP API
 
@@ -57,14 +59,22 @@ Base path: `/api/invoices`
 | `GET` | `/customer/{id}` | Get invoices for a customer id | `MANAGER`, `ADMIN` |
 | `PATCH` | `/{invoiceNumber}/complete` | Complete invoice | `MANAGER`, `ADMIN` |
 | `GET` | `/{invoiceNumber}/pdf` | Render invoice PDF | `MANAGER`, `ADMIN` |
+| `POST` | `/{invoiceNumber}/chargebacks` | Create chargeback immediately | `MANAGER`, `ADMIN` |
+| `GET` | `/chargeback-requests` | Get pending chargeback requests | `MANAGER`, `ADMIN` |
+| `PATCH` | `/{invoiceNumber}/chargeback-request/approve` | Approve requested chargeback | `MANAGER`, `ADMIN` |
+| `PATCH` | `/{invoiceNumber}/chargeback-request/decline` | Decline requested chargeback | `MANAGER`, `ADMIN` |
 | `GET` | `/me` | Get current customer invoices | authenticated user |
 | `GET` | `/me/{invoiceNumber}/pdf` | Render current customer invoice PDF | authenticated user |
+| `POST` | `/me/{invoiceNumber}/chargeback-request` | Request chargeback for current customer invoice | authenticated user |
 
 Chargebacks:
 
-- `POST /api/invoices/chargebacks`
 - `GET /api/invoices/chargebacks`
 - `GET /api/invoices/chargebacks/{invoiceNumber}`
+- `POST /api/invoices/{invoiceNumber}/chargebacks`
+- `GET /api/invoices/chargeback-requests`
+- `PATCH /api/invoices/{invoiceNumber}/chargeback-request/approve`
+- `PATCH /api/invoices/{invoiceNumber}/chargeback-request/decline`
 
 ## Security
 
@@ -87,7 +97,6 @@ The JWT parser accepts role claims in these forms:
 ### Consumed events
 
 - `repair.completed`
-- `chargeback.requested`
 
 ### Published events
 
@@ -178,5 +187,9 @@ Environment variables used there include:
 ## Notes
 
 - `GET /api/invoices` is a staff endpoint. Customer-facing panels should call `GET /api/invoices/me`.
+- Staff can still create an immediate chargeback through `POST /api/invoices/{invoiceNumber}/chargebacks`.
+- Invoice responses now include chargeback request state and request metadata.
+- Customer-facing profile tabs should request chargebacks through `POST /api/invoices/me/{invoiceNumber}/chargeback-request`.
+- Management should review pending requests through `GET /api/invoices/chargeback-requests` and approve or decline them with the dedicated `PATCH` endpoints.
 - CORS is configured globally in the security configuration.
 - Repair invoice creation depends on the user service for customer lookup.

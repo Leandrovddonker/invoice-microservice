@@ -10,7 +10,17 @@ class GatewayJwtTokenParser(
     private val objectMapper: ObjectMapper
 ) {
     private val claimTypeReference = object : TypeReference<Map<String, Any?>>() {}
-    private val userIdClaimNames = listOf("userId", "id", "user_id", "sub")
+    private val userIdClaimNames = listOf(
+        "userId",
+        "id",
+        "user_id",
+        "uid",
+        "customerId",
+        "customer_id",
+        "accountId",
+        "account_id",
+        "sub"
+    )
     private val roleClaimNames = listOf("role", "roles", "authorities")
 
     fun parse(token: String): GatewayJwtPrincipal? {
@@ -24,10 +34,7 @@ class GatewayJwtTokenParser(
         }
 
         val claims = objectMapper.readValue(payloadBytes, claimTypeReference)
-        val userId = userIdClaimNames
-            .asSequence()
-            .mapNotNull { claimName -> claims[claimName]?.coerceToLongOrNull() }
-            .firstOrNull()
+        val userId = findUserId(claims)
             ?: return null
 
         return GatewayJwtPrincipal(
@@ -43,6 +50,30 @@ class GatewayJwtTokenParser(
             .mapNotNull { claimName -> claims[claimName] }
             .mapNotNull(::normalizeRole)
             .firstOrNull()
+
+    private fun findUserId(claims: Map<String, Any?>): Long? {
+        userIdClaimNames.forEach { claimName ->
+            claims[claimName]?.coerceToLongOrNull()?.let { return it }
+        }
+
+        claims.values
+            .asSequence()
+            .mapNotNull(::findUserIdInNestedValue)
+            .firstOrNull()
+            ?.let { return it }
+
+        return null
+    }
+
+    private fun findUserIdInNestedValue(value: Any?): Long? =
+        when (value) {
+            is Map<*, *> -> findUserId(value.entries
+                .mapNotNull { (key, nestedValue) -> (key as? String)?.let { it to nestedValue } }
+                .toMap())
+            is Collection<*> -> value.asSequence().mapNotNull(::findUserIdInNestedValue).firstOrNull()
+            is Array<*> -> value.asSequence().mapNotNull(::findUserIdInNestedValue).firstOrNull()
+            else -> null
+        }
 
     private fun Any.coerceToLongOrNull(): Long? =
         when (this) {

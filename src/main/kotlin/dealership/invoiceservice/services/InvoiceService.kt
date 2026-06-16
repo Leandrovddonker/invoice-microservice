@@ -60,7 +60,7 @@ class InvoiceService(
     }
 
     fun getAllInvoices(): List<InvoiceResponseDto> =
-        invoiceMapper.listOfInvoicesToDto(repository.findAll())
+        invoiceMapper.listOfInvoicesToDto(repository.findAllByOrderByCreatedAtDesc())
 
     fun getInvoiceById(id: Long): InvoiceResponseDto {
         val invoiceFound = repository.findById(id)
