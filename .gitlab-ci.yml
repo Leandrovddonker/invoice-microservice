@@ -81,7 +81,8 @@ package:
     - echo "$CI_DEPENDENCY_PROXY_PASSWORD" | docker login "$CI_DEPENDENCY_PROXY_SERVER" -u "$CI_DEPENDENCY_PROXY_USER" --password-stdin
   script:
     - ./gradlew --build-cache bootJar
-    - docker build \
+    - |
+      docker build \
       --build-arg TEMURIN_IMAGE=${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/eclipse-temurin:21-jre \
       -t "$DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA" .
     - docker push "$DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA"
