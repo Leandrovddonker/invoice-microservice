@@ -1,7 +1,7 @@
 plugins {
     id("org.springframework.boot") version "4.0.3"
     id("io.spring.dependency-management") version "1.1.7"
-    id("org.sonarqube") version "6.0.1.5171"
+    id("org.sonarqube") version "7.3.1.8318"
     kotlin("jvm") version "2.2.0"
     kotlin("plugin.spring") version "2.2.0"
     kotlin("plugin.jpa") version "2.2.0"
