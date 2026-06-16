@@ -122,6 +122,7 @@ Important properties:
 | `SERVICES_USER_BASE_URL` | user service base URL | `http://localhost:8081` locally |
 | `EUREKA_CLIENT_ENABLED` | Eureka registration toggle | `true` |
 | `EUREKA_DEFAULT_ZONE` | Eureka server URL | `http://localhost:8761/eureka/` locally |
+| `EUREKA_INSTANCE_HOSTNAME` | hostname advertised to Eureka | `localhost` locally, `invoice-service` in Docker |
 | `TAX_RATES_LABOR` | labor VAT rate | `0.19` |
 | `TAX_RATES_PART` | part VAT rate | `0.21` |
 | `TAX_RATES_SALE` | sales VAT rate | `0.21` |
