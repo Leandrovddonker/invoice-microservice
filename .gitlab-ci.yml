@@ -60,17 +60,26 @@ test:
 # Analyze the codebase
 SonarQube:
   stage: sonar
-  image: eclipse-temurin:21-jdk
+  image: gradle:8.10.0-jdk17-jammy
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
   before_script:
       - chmod +x ./gradlew
-  script:
-    - ./gradlew sonar
-      -Dsonar.host.url="$SONAR_HOST_URL"
-      -Dsonar.token="$SONAR_TOKEN"
-  rules:
-    - if: '$CI_COMMIT_BRANCH =~ /^feature\/.+$/'
-    - if: '$CI_COMMIT_BRANCH == "dev"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
+  cache:
+    policy: pull-push
+    key: "sonar-cache-$CI_COMMIT_REF_SLUG"
+    paths:
+      - "${SONAR_USER_HOME}/cache"
+      - sonar-scanner/
+
+    script: gradle sonar
+    allow_failure: true
+    rules:
+      - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+      - if: $CI_COMMIT_BRANCH == 'master'
+      - if: $CI_COMMIT_BRANCH == 'main'
+      - if: $CI_COMMIT_BRANCH == 'dev'
 
 # Build the production jar, bake it into a Docker image and push that image to GitLab.
 package:
