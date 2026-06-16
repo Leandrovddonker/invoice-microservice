@@ -13,6 +13,9 @@ services:
         limits:
           memory: 256m
           cpus: "0.5"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     networks:
         - invoice-network
     environment:
@@ -25,13 +28,43 @@ services:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_RABBITMQ_HOST: ${SPRING_RABBITMQ_HOST}
+      SPRING_RABBITMQ_HOST: ${SPRING_RABBITMQ_HOST:-rabbitmq}
       SPRING_RABBITMQ_PORT: ${SPRING_RABBITMQ_PORT:-5672}
-      SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME}
-      SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD}
+      SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:-invoice-service}
+      SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:-change-me}
       TAX_RATES_LABOR: ${TAX_RATES_LABOR:-0.19}
       TAX_RATES_PART: ${TAX_RATES_PART:-0.21}
       TAX_RATES_SALE: ${TAX_RATES_SALE:-0.21}
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ${RABBITMQ_CONTAINER_NAME:-kotlin-invoice-rabbitmq}
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${SPRING_RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${SPRING_RABBITMQ_PASSWORD:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - invoice-network
+
+volumes:
+  rabbitmq-data:
+
 networks:
   invoice-network:
     driver: bridge
