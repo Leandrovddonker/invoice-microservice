@@ -1,4 +1,5 @@
-FROM eclipse-temurin:21-jre
+ARG TEMURIN_IMAGE=eclipse-temurin:21-jre
+FROM ${TEMURIN_IMAGE}
 
 WORKDIR /app
 
