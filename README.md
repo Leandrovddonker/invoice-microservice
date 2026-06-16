@@ -115,10 +115,12 @@ Important properties:
 | `SPRING_DATASOURCE_URL` | database connection | local Postgres |
 | `SPRING_DATASOURCE_USERNAME` | database username | `postgres` locally |
 | `SPRING_DATASOURCE_PASSWORD` | database password | `postgres` locally |
-| `SPRING_RABBITMQ_HOST` | RabbitMQ host | `localhost` locally |
+| `SPRING_RABBITMQ_HOST` | RabbitMQ host | `localhost` locally, `rabbitmq` in Docker by default |
 | `SPRING_RABBITMQ_PORT` | RabbitMQ port | `5672` |
-| `SPRING_RABBITMQ_USERNAME` | RabbitMQ username | `guest` locally |
-| `SPRING_RABBITMQ_PASSWORD` | RabbitMQ password | `guest` locally |
+| `SPRING_RABBITMQ_USERNAME` | RabbitMQ username | `guest` locally, custom user in Docker/deploy |
+| `SPRING_RABBITMQ_PASSWORD` | RabbitMQ password | `guest` locally, custom password in Docker/deploy |
+| `RABBITMQ_AMQP_PORT` | exposed RabbitMQ AMQP port in Docker/deploy | `5672` |
+| `RABBITMQ_MANAGEMENT_PORT` | exposed RabbitMQ management UI port in Docker/deploy | `15672` |
 | `SERVICES_USER_BASE_URL` | user service base URL | `http://localhost:8081` locally |
 | `EUREKA_CLIENT_ENABLED` | Eureka registration toggle | `true` |
 | `EUREKA_DEFAULT_ZONE` | Eureka server URL | `http://localhost:8761/eureka/` locally |
@@ -177,10 +179,11 @@ Environment variables used there include:
 - `SPRING_DATASOURCE_URL`
 - `SPRING_DATASOURCE_USERNAME`
 - `SPRING_DATASOURCE_PASSWORD`
-- `SPRING_RABBITMQ_HOST`
 - `SPRING_RABBITMQ_PORT`
 - `SPRING_RABBITMQ_USERNAME`
 - `SPRING_RABBITMQ_PASSWORD`
+- `RABBITMQ_AMQP_PORT`
+- `RABBITMQ_MANAGEMENT_PORT`
 - `SERVICES_USER_BASE_URL`
 - `EUREKA_CLIENT_ENABLED`
 - `EUREKA_DEFAULT_ZONE`
