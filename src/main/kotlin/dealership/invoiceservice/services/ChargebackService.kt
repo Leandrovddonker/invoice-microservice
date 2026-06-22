@@ -18,7 +18,8 @@ import java.util.Date
 @Service
 class ChargebackService(
     private val invoiceRepository: InvoiceRepository,
-    private val invoiceMapper: InvoiceMapper
+    private val invoiceMapper: InvoiceMapper,
+    private val INVOICE_NOT_FOUND: String = "invoice Not Found"
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -28,7 +29,7 @@ class ChargebackService(
             throw IllegalArgumentException("Invoice number is required")
         }
         val invoice = invoiceRepository.findByInvoiceNumber(normalizedInvoiceNumber)
-            ?: throw IllegalArgumentException("Invoice not found")
+            ?: throw IllegalArgumentException(INVOICE_NOT_FOUND)
 
         return createChargebackNow(invoice, request.amount, request.reason)
     }
@@ -40,11 +41,11 @@ class ChargebackService(
         request: CreateChargebackRequestDto
     ): InvoiceResponseDto {
         val invoice = invoiceRepository.findByInvoiceNumber(invoiceNumber)
-            ?: throw IllegalArgumentException("Invoice not found")
+            ?: throw IllegalArgumentException(INVOICE_NOT_FOUND)
 
         if (invoice.customerId != customerId) {
             log.error("Customer {} attempted chargeback for invoice {}", customerId, invoiceNumber)
-            throw IllegalArgumentException("Invoice not found")
+            throw IllegalArgumentException(INVOICE_NOT_FOUND)
         }
 
         return storeChargebackRequest(invoice, request.amount, request.reason)
@@ -53,7 +54,7 @@ class ChargebackService(
     @Transactional
     fun approveChargebackRequest(invoiceNumber: String): InvoiceResponseDto {
         val invoice = invoiceRepository.findByInvoiceNumber(invoiceNumber)
-            ?: throw IllegalArgumentException("Invoice not found")
+            ?: throw IllegalArgumentException(INVOICE_NOT_FOUND)
 
         if (invoice.chargebackRequestStatus != ChargebackRequestStatus.REQUESTED) {
             throw IllegalArgumentException("Chargeback request is not pending")
@@ -77,9 +78,9 @@ class ChargebackService(
     @Transactional
     fun declineChargebackRequest(invoiceNumber: String): InvoiceResponseDto {
         val invoice = invoiceRepository.findByInvoiceNumber(invoiceNumber)
-            ?: throw IllegalArgumentException("Invoice not found")
+            ?: throw IllegalArgumentException(INVOICE_NOT_FOUND)
 
-        if (invoice.chargebackRequestStatus != ChargebackRequestStatus.REQUESTED) {
+        require (invoice.chargebackRequestStatus == ChargebackRequestStatus.REQUESTED) {
             throw IllegalArgumentException("Chargeback request is not pending")
         }
 
