@@ -22,6 +22,7 @@ class SecurityConfig(
         http
             .authorizeHttpRequests {
                 it.requestMatchers("/h2-console/**").permitAll()
+                    .requestMatchers("/error").permitAll()
                     .requestMatchers("/api/invoices/me", "/api/invoices/me/**").authenticated()
                     .requestMatchers("/api/invoices/**").hasAnyRole("MANAGER", "ADMIN")
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
