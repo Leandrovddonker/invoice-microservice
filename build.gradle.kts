@@ -1,6 +1,7 @@
 plugins {
     id("org.springframework.boot") version "4.0.3"
     id("io.spring.dependency-management") version "1.1.7"
+    id("jacoco")
     id("org.sonarqube") version "7.3.1.8318"
     kotlin("jvm") version "2.2.0"
     kotlin("plugin.spring") version "2.2.0"
@@ -31,6 +32,7 @@ sonar {
         property("sonar.projectKey", "org_st_inf_software-engineering-2_25-26-bpset_groep-08_invoice_41b80bd2-7cc3-4aa0-bc3d-73d80d5a0a29")
         property("sonar.projectName", "Invoice")
         property("sonar.qualitygate.wait", true)
+        property("sonar.coverage.jacoco.xmlReportPaths", layout.buildDirectory.file("reports/jacoco/test/jacocoTestReport.xml").get().asFile.absolutePath)
     }
 }
 dependencyManagement {
@@ -64,6 +66,22 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    classDirectories.setFrom(
+        layout.buildDirectory.dir("classes/kotlin/main").map { classesDir ->
+            fileTree(classesDir) {
+                exclude("**/* *.class")
+            }
+        }
+    )
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
 
 tasks.bootJar {

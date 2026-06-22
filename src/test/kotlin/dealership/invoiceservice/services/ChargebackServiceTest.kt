@@ -345,6 +345,484 @@ class ChargebackServiceTest {
         verify(invoiceRepository, never()).save(any(Invoice::class.java))
     }
 
+    @Test
+    fun `get all chargebacks returns only chargeback invoices`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val chargebackInvoice = Invoice(
+            id = 8L,
+            invoiceNumber = "VA-2026-0002",
+            type = InvoiceType.CHARGEBACK,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 43L,
+            customerName = "Grace Hopper",
+            customerEmail = "grace@example.com",
+            subtotal = BigDecimal("-50.00"),
+            vatAmount = BigDecimal.ZERO,
+            totalAmount = BigDecimal("-50.00"),
+            sourceReference = "VA-2026-0001",
+            createdAt = Date()
+        )
+
+        `when`(invoiceRepository.findAllByType(InvoiceType.CHARGEBACK)).thenReturn(listOf(chargebackInvoice))
+
+        val response = service.getAllChargebacks()
+
+        assertEquals(1, response.size)
+        assertEquals(InvoiceType.CHARGEBACK, response.single().type)
+        assertEquals("VA-2026-0001", response.single().sourceReference)
+    }
+
+    @Test
+    fun `get chargeback by invoice number returns chargeback dto`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val chargebackInvoice = Invoice(
+            id = 8L,
+            invoiceNumber = "VA-2026-0002",
+            type = InvoiceType.CHARGEBACK,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 43L,
+            customerName = "Grace Hopper",
+            customerEmail = "grace@example.com",
+            subtotal = BigDecimal("-50.00"),
+            vatAmount = BigDecimal.ZERO,
+            totalAmount = BigDecimal("-50.00"),
+            sourceReference = "VA-2026-0001",
+            createdAt = Date()
+        )
+
+        `when`(invoiceRepository.findBySourceReferenceAndType("VA-2026-0001", InvoiceType.CHARGEBACK))
+            .thenReturn(chargebackInvoice)
+
+        val response = service.getChargebackByInvoiceNumber("VA-2026-0001")
+
+        assertEquals("VA-2026-0002", response.invoiceNumber)
+        assertEquals(InvoiceType.CHARGEBACK, response.type)
+    }
+
+    @Test
+    fun `get chargeback by invoice number throws when chargeback does not exist`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+
+        `when`(invoiceRepository.findBySourceReferenceAndType("VA-2026-0001", InvoiceType.CHARGEBACK))
+            .thenReturn(null)
+
+        val exception = assertThrows(RuntimeException::class.java) {
+            service.getChargebackByInvoiceNumber("VA-2026-0001")
+        }
+
+        assertEquals("Chargeback not found", exception.message)
+    }
+
+    @Test
+    fun `cannot create immediate chargeback with blank invoice number`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.createChargeback(
+                invoiceNumber = "",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("25.00"),
+                    reason = "Refund requested"
+                )
+            )
+        }
+
+        assertEquals("Invoice number is required", exception.message)
+    }
+
+    @Test
+    fun `cannot create immediate chargeback when invoice does not exist`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-9999")).thenReturn(null)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.createChargeback(
+                invoiceNumber = "VA-2026-9999",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("25.00"),
+                    reason = "Refund requested"
+                )
+            )
+        }
+
+        assertEquals("Invoice not found", exception.message)
+    }
+
+    @Test
+    fun `cannot create immediate chargeback when amount exceeds invoice total`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.SALE,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 1L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "sale-AB-123-CD",
+            createdAt = Date()
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(RuntimeException::class.java) {
+            service.createChargeback(
+                invoiceNumber = "VA-2026-0001",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("150.00"),
+                    reason = "Refund requested"
+                )
+            )
+        }
+
+        assertEquals("Chargeback could not be created", exception.message)
+    }
+
+    @Test
+    fun `cannot create immediate chargeback for pending invoice`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.SALE,
+            status = InvoiceStatus.PENDING,
+            customerId = 1L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "sale-AB-123-CD",
+            createdAt = Date()
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(RuntimeException::class.java) {
+            service.createChargeback(
+                invoiceNumber = "VA-2026-0001",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("25.00"),
+                    reason = "Refund requested"
+                )
+            )
+        }
+
+        assertEquals("Chargeback could not be created", exception.message)
+    }
+
+    @Test
+    fun `cannot create immediate chargeback for already refunded invoice`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.SALE,
+            status = InvoiceStatus.REFUNDED,
+            customerId = 1L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "sale-AB-123-CD",
+            createdAt = Date(),
+            chargebackRequestStatus = ChargebackRequestStatus.APPROVED
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(RuntimeException::class.java) {
+            service.createChargeback(
+                invoiceNumber = "VA-2026-0001",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("25.00"),
+                    reason = "Refund requested"
+                )
+            )
+        }
+
+        assertEquals("Chargeback could not be created", exception.message)
+    }
+
+    @Test
+    fun `cannot request chargeback twice for the same invoice`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.REPAIR,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 42L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "Repair-7",
+            createdAt = Date(),
+            chargebackRequestStatus = ChargebackRequestStatus.REQUESTED,
+            chargebackRequestedAmount = BigDecimal("25.00"),
+            chargebackRequestReason = "Wrong amount charged",
+            chargebackRequestedAt = Date()
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(RuntimeException::class.java) {
+            service.requestChargebackForCustomer(
+                customerId = 42L,
+                invoiceNumber = "VA-2026-0001",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("25.00"),
+                    reason = "Wrong amount charged"
+                )
+            )
+        }
+
+        assertEquals("Chargeback request could not be created", exception.message)
+    }
+
+    @Test
+    fun `customer chargeback request fails when invoice does not exist`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-9999")).thenReturn(null)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.requestChargebackForCustomer(
+                customerId = 42L,
+                invoiceNumber = "VA-2026-9999",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("25.00"),
+                    reason = "Wrong amount charged"
+                )
+            )
+        }
+
+        assertEquals("Invoice not found", exception.message)
+    }
+
+    @Test
+    fun `customer chargeback request fails when request was already approved`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.REPAIR,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 42L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "Repair-7",
+            createdAt = Date(),
+            chargebackRequestStatus = ChargebackRequestStatus.APPROVED,
+            chargebackRequestedAmount = BigDecimal("25.00"),
+            chargebackRequestReason = "Wrong amount charged",
+            chargebackRequestedAt = Date(),
+            chargebackReviewedAt = Date()
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(RuntimeException::class.java) {
+            service.requestChargebackForCustomer(
+                customerId = 42L,
+                invoiceNumber = "VA-2026-0001",
+                request = CreateChargebackRequestDto(
+                    amount = BigDecimal("25.00"),
+                    reason = "Wrong amount charged"
+                )
+            )
+        }
+
+        assertEquals("Chargeback request could not be created", exception.message)
+    }
+
+    @Test
+    fun `approve chargeback request rejects missing invoice`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-9999")).thenReturn(null)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.approveChargebackRequest("VA-2026-9999")
+        }
+
+        assertEquals("Invoice not found", exception.message)
+    }
+
+    @Test
+    fun `approve chargeback request fails when requested amount is missing`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.REPAIR,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 42L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "Repair-7",
+            createdAt = Date(),
+            chargebackRequestStatus = ChargebackRequestStatus.REQUESTED,
+            chargebackRequestedAmount = null,
+            chargebackRequestReason = "Wrong amount charged",
+            chargebackRequestedAt = Date()
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.approveChargebackRequest("VA-2026-0001")
+        }
+
+        assertEquals("Chargeback amount is missing", exception.message)
+    }
+
+    @Test
+    fun `approve chargeback request rejects invoices without pending request`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.REPAIR,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 42L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "Repair-7",
+            createdAt = Date(),
+            chargebackRequestStatus = ChargebackRequestStatus.NONE
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.approveChargebackRequest("VA-2026-0001")
+        }
+
+        assertEquals("Chargeback request is not pending", exception.message)
+    }
+
+    @Test
+    fun `decline chargeback request rejects missing invoice`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-9999")).thenReturn(null)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.declineChargebackRequest("VA-2026-9999")
+        }
+
+        assertEquals("Invoice not found", exception.message)
+    }
+
+    @Test
+    fun `decline chargeback request rejects invoices without pending request`() {
+        val invoiceRepository = mock(InvoiceRepository::class.java)
+        val service = ChargebackService(
+            invoiceRepository = invoiceRepository,
+            invoiceMapper = InvoiceMapper(InvoiceLineMapper())
+        )
+        val invoice = Invoice(
+            id = 7L,
+            invoiceNumber = "VA-2026-0001",
+            type = InvoiceType.REPAIR,
+            status = InvoiceStatus.COMPLETED,
+            customerId = 42L,
+            customerName = "Ada Lovelace",
+            customerEmail = "ada@example.com",
+            subtotal = BigDecimal("100.00"),
+            vatAmount = BigDecimal("21.00"),
+            totalAmount = BigDecimal("121.00"),
+            sourceReference = "Repair-7",
+            createdAt = Date(),
+            chargebackRequestStatus = ChargebackRequestStatus.NONE
+        )
+
+        `when`(invoiceRepository.findByInvoiceNumber("VA-2026-0001")).thenReturn(invoice)
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            service.declineChargebackRequest("VA-2026-0001")
+        }
+
+        assertEquals("Chargeback request is not pending", exception.message)
+    }
+
     private fun Invoice.copyForTest(id: Long): Invoice =
         Invoice(
             id = id,
