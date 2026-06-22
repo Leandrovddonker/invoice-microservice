@@ -19,7 +19,7 @@ import java.util.Date
 class ChargebackService(
     private val invoiceRepository: InvoiceRepository,
     private val invoiceMapper: InvoiceMapper,
-    private val INVOICE_NOT_FOUND: String = "invoice Not Found"
+    private val INVOICE_NOT_FOUND: String = "Invoice not found"
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
