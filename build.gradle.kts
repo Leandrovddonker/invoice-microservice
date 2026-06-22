@@ -32,7 +32,7 @@ sonar {
         property("sonar.projectKey", "org_st_inf_software-engineering-2_25-26-bpset_groep-08_invoice_41b80bd2-7cc3-4aa0-bc3d-73d80d5a0a29")
         property("sonar.projectName", "Invoice")
         property("sonar.qualitygate.wait", true)
-        property("sonar.coverage.jacoco.xmlReportPaths", layout.buildDirectory.file("reports/jacoco/test/jacocoTestReport.xml").get().asFile.absolutePath)
+        property("sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml")
     }
 }
 dependencyManagement {
@@ -82,6 +82,10 @@ tasks.jacocoTestReport {
         xml.required.set(true)
         html.required.set(true)
     }
+}
+
+tasks.named("sonar") {
+    dependsOn(tasks.jacocoTestReport)
 }
 
 tasks.bootJar {
