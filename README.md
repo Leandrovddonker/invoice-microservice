@@ -10,6 +10,8 @@ Each team member was responsible for developing and integrating their own micros
 
 My responsibility was designing and implementing the **Invoice Service**, which handles invoice creation, management, PDF generation, and chargeback workflows. The service integrates with other microservices to automatically generate invoices based on business events.
 
+This repository focuses on my individual contribution to the team project. Other microservices, such as the User Service, were developed separately and are not included.
+
 ## Tech Stack
 
 - **Language:** Kotlin 2.2
